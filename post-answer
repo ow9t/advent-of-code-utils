@@ -1,0 +1,82 @@
+#! /usr/bin/env bash
+
+# Copyright 2022 Ole Walkenhorst
+
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+# https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+# <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+# option. This file may not be copied, modified, or distributed
+# except according to those terms.
+
+set -eu
+
+function usage() {
+	echo "Usage: $0 [-h] [-y YEAR] [-d DAY] [-l LEVEL] ANSWER [ANSWER]"
+}
+
+LEVEL=1
+CURRENTYEAR="$( date +%Y )"
+YEAR="$CURRENTYEAR"
+TODAY="$( date +%-d )"
+DAY="$TODAY"
+
+shopt -s extglob
+while getopts ":hy:d:l:" opt; do
+	case "$opt" in
+		h) usage && exit 0;;
+		y) YEAR="$OPTARG";;
+		d) DAY="${OPTARG##+(0)}";;
+		l) LEVEL="$OPTARG";;
+		:) echo "Option '$OPTARG' missing a required argument." && exit 1;;
+		\?) echo "Invalid option $OPTARG" && exit 1;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+answer=${2:-${1?$( usage )}}
+
+if [[ "$YEAR" -lt 2015 || "$YEAR" -gt "$CURRENTYEAR" ]]; then
+	echo "YEAR must be between 2015 and $CURRENTYEAR inclusive." >&2
+	exit 1
+fi
+
+if [[ "$DAY" -lt 1 || "$DAY" -gt 25 ]]; then
+	echo "DAY must be between 1 and 25 inclusive." >&2
+	exit 1
+fi
+
+level=${2:+2}
+level=${level:-$LEVEL}
+
+if [[ "$level" -ne 1 && "$level" -ne 2 ]]; then
+	echo "LEVEL must be 1 or 2." >&2
+	exit 1
+fi
+
+[[ -f '.env' ]] && source '.env'
+cookie=${SESSION_COOKIE?SESSION_COOKIE must be set.}
+
+response=$(curl "https://adventofcode.com/$YEAR/day/$DAY/answer" \
+             -X POST \
+             -H 'Content-Type: application/x-www-form-urlencoded' \
+             -H 'Origin: https://adventofcode.com' \
+             -H "Referer: https://adventofcode.com/$YEAR/day/$DAY" \
+             -H "Cookie: session=$cookie" \
+             --data-raw "level=$level&answer=$answer")
+
+correct="That's the right answer"
+wrong="That's not the right answer"
+limit='You gave an answer too recently'
+if [[ "$response" == *"$correct"* ]]; then
+	echo "$correct"
+	exit 0
+elif [[ "$response" == *"$wrong"* ]]; then
+	echo "$wrong"
+	exit 2
+elif [[ "$response" == *"$limit"* ]]; then
+	echo "$limit"
+	exit 2
+else
+	echo "$response"
+	exit 2
+fi
