@@ -1,0 +1,76 @@
+#! /usr/bin/env bash
+
+# Copyright 2022 Ole Walkenhorst
+
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+# https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+# <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+# option. This file may not be copied, modified, or distributed
+# except according to those terms.
+
+set -eu
+
+function usage() {
+	echo "Usage: $0 [-h] [-o OUTDIR] [-f FILENAME] [-y YEAR] [-d DAY]"
+}
+
+OUTDIR=inputs
+FILENAME=''
+CURRENTYEAR="$( date +%Y )"
+YEAR="$CURRENTYEAR"
+TODAY="$( date +%-d )"
+DAY="$TODAY"
+
+shopt -s extglob
+while getopts ":hfd:o:y:d:" opt; do
+	case "$opt" in
+		h) usage && exit 0;;
+		o) OUTDIR="$OPTARG";;
+		f) FILENAME="$OPTARG";;
+		y) YEAR="$OPTARG";;
+		d) DAY="${OPTARG##+(0)}";;
+		:) echo "Option '$OPTARG' missing a required argument." && exit 1;;
+		\?) echo "Invalid option $OPTARG" && exit 1;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+if [[ "$#" -gt 0 ]]; then
+	echo "Invalid positional argument $1" >&2
+	exit 1
+fi
+
+if [[ "$YEAR" -lt 2015 || "$YEAR" -gt "$CURRENTYEAR" ]]; then
+	echo "YEAR must be between 2015 and $CURRENTYEAR inclusive." >&2
+	exit 1
+fi
+
+if [[ "$DAY" -lt 1 || "$DAY" -gt 25 ]]; then
+	echo "DAY must be between 1 and 25 inclusive." >&2
+	exit 1
+fi
+
+[[ -f '.env' ]] && source '.env'
+cookie=${SESSION_COOKIE?SESSION_COOKIE must be set.}
+
+response=$(curl -s "https://adventofcode.com/$YEAR/day/$DAY/input" \
+                -H "Cookie: session=$cookie")
+
+if [[ "$response" == *"Please don't repeatedly request this endpoint before it unlocks!"* ]]; then
+	echo "Day $DAY is not unlocked, yet" >&2
+	exit 2
+fi
+
+if [[ ! -d "$OUTDIR" ]]; then
+	mkdir -p "$OUTDIR"
+fi
+
+filepath="$OUTDIR/${FILENAME:-"input.$DAY"}"
+if [[ -f "$filepath" ]]; then
+	echo "File already exists '$filepath'" >&2
+	exit 2
+fi
+
+echo "$response" > "$filepath"
+echo "Wrote '$filepath'"
+exit 0
