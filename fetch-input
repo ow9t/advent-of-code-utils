@@ -22,7 +22,7 @@ TODAY="$( date +%-d )"
 DAY="$TODAY"
 
 shopt -s extglob
-while getopts ":hfd:o:y:d:" opt; do
+while getopts ":ho:f:y:d:" opt; do
 	case "$opt" in
 		h) usage && exit 0;;
 		o) OUTDIR="$OPTARG";;
